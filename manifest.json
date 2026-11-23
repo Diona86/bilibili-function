@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "B 站视频总结",
+  "description": "下载当前分 P 的视频，或结合完整音频和画面生成可以跳转到原片的学习笔记。",
+  "version": "0.7.0",
+  "minimum_chrome_version": "116",
+  "permissions": ["sidePanel", "scripting", "storage", "offscreen"],
+  "host_permissions": ["https://www.bilibili.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js" },
+  "web_accessible_resources": [{
+    "resources": ["vendor/mediabunny.min.mjs"],
+    "matches": ["https://www.bilibili.com/*"]
+  }],
+  "action": { "default_title": "打开视频总结" },
+  "side_panel": { "default_path": "sidepanel.html" }
+}

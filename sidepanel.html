@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B 站视频总结</title>
+  <link rel="stylesheet" href="sidepanel.css">
+  <script type="module" src="sidepanel.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><h1>视频总结</h1></div>
+    <button type="button" id="settingsButton" class="quiet">模型设置</button>
+  </header>
+
+  <main>
+    <section class="video-card" aria-labelledby="videoTitle">
+      <div class="video-meta" id="videoMeta" hidden><span id="videoLabel">当前 B 站视频</span><span class="part" id="videoPart"></span></div>
+      <h2 id="videoTitle">打开 B 站视频</h2>
+      <p id="emptyVideo">在普通 B 站视频页打开侧栏，即可生成可回看的学习笔记。</p>
+      <button type="button" id="downloadButton" class="secondary" hidden>下载当前分 P</button>
+      <p id="downloadStatus" class="status" role="status" aria-atomic="true"></p>
+    </section>
+
+    <div id="workspace" hidden>
+      <div class="source-section" id="sourceSection">
+        <label for="audioSource">音频来源</label>
+        <select id="audioSource" aria-describedby="sourceHelp">
+          <option value="auto">自动获取 B 站音轨</option>
+          <option value="file">本地音视频文件</option>
+          <option value="url">授权音轨直链</option>
+          <option value="player">当前播放器音轨</option>
+        </select>
+        <input id="audioFile" type="file" accept="audio/*,video/*,.m4a,.mp4,.wav,.ogg,.webm,.mp3,.flac" aria-label="选择当前分 P 的完整音视频文件" hidden>
+        <input id="audioUrl" type="url" placeholder="https://…" aria-label="授权音轨直链" hidden>
+        <p id="sourceHelp" class="source-label">播放几秒后生成。扩展会从当前分 P 的播放请求定位并下载音轨。</p>
+      </div>
+      <button type="button" id="generateButton" class="primary generate" disabled>生成学习笔记</button>
+      <p class="source-label" id="sourceNotice">完整音频会发给 DeepSeek 转写，模型会结合转写和原片画面整理。</p>
+    </div>
+
+    <p id="status" class="status" role="status" aria-atomic="true"></p>
+    <button type="button" id="retryButton" class="secondary" hidden>重试整理笔记</button>
+
+    <section id="resultPanel" class="result-panel" aria-labelledby="resultTitle" hidden>
+      <div class="result-heading">
+        <h2 id="resultTitle">学习笔记</h2>
+        <button type="button" id="copyButton" class="quiet">复制笔记</button>
+      </div>
+      <p id="resultVideo" class="source-label" hidden></p>
+      <p id="overview" class="overview"></p>
+      <h3>分段笔记</h3>
+      <ol id="highlights" class="highlights"></ol>
+      <details id="transcript" class="transcript" hidden>
+        <summary>查看完整转写</summary>
+        <pre id="transcriptText"></pre>
+      </details>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog" aria-labelledby="settingsTitle">
+    <form id="settingsForm">
+      <h2 id="settingsTitle">模型设置</h2>
+      <p class="settings-note">使用 DeepSeek 官方接口和支持图像的模型，例如 deepseek-flash。音频转写和笔记生成沿用同一个 API Key。</p>
+      <label for="apiAddress">API 地址</label>
+      <input id="apiAddress" type="url" placeholder="https://api.example.com/v1" required>
+      <label for="modelName">模型名称</label>
+      <input id="modelName" type="text" spellcheck="false" required>
+      <label for="apiKey">API Key <span>（由服务决定是否必填）</span></label>
+      <input id="apiKey" type="password" autocomplete="off" spellcheck="false">
+      <p id="settingsError" class="status" role="alert" data-tone="error"></p>
+      <div class="actions dialog-actions">
+        <button type="button" id="closeSettings" class="secondary">取消</button>
+        <button type="submit" id="saveSettings" class="primary">保存设置</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
