@@ -1,20 +1,24 @@
-# B 站视频总结
+# 网页视频下载与 B 站笔记
 
-桌面 Chrome 扩展。结合当前分 P 的完整音频转写和取样画面，按章节整理学习笔记，支持点击时间回看原片。
+桌面 Chrome 扩展，可下载普通网页和嵌入式播放器中的视频。在 B 站视频页，还可以结合当前分 P 的音频和画面生成可跳转到原片的学习笔记。
 
 ## 安装
 
 1. 在 Chrome 116 或更新版本打开 `chrome://extensions/`，开启「开发者模式」。
 2. 点击「加载已解压的扩展程序」，选择本项目目录（包含 `manifest.json`）。
-3. 打开一个普通 B 站视频，在浏览器工具栏的拼图菜单里点击「B 站视频总结」。
+3. 打开视频所在网页，在浏览器工具栏的拼图菜单里点「网页视频下载与 B 站笔记」。
 
 ## 下载视频
 
-打开普通 B 站视频，选好分 P 和清晰度，播放几秒后，在侧栏的视频标题下点「下载当前分 P」。准备期间请保留原视频页和当前分 P。Chrome 会按下载设置保存 `视频标题 - P序号.mp4`，进度可在下载记录中查看。下载无需配置模型或 API Key。
+**普通网页和嵌入式播放器**。先播放目标视频几秒，再点工具栏的扩展图标。在侧栏点「查找网页视频」，选择视频来源，然后点「下载所选视频」。若列表显示「嵌入播放器」，选中它并点「允许读取播放器」，授权该域名后即可继续查找。在多个网站之间切换时，可在新标签页再点一次扩展图标。
 
-扩展使用播放器已加载的 MP4 或 DASH 音视频地址。分离的音画轨道会在浏览器内合并，保留原编码。MP4 封装使用随扩展提供的 [Mediabunny 1.66.2](https://www.npmjs.com/package/mediabunny/v/1.66.2)，许可证见 [MPL-2.0](vendor/Mediabunny-LICENSE.txt)。
+支持 MP4、WebM、MOV、Ogg 视频和 MKV 文件，以及可读取的 HLS 点播清单（M3U8）和常见单时段 DASH 点播清单（MPD，MP4 分段）。直链文件保留原格式，点播流在浏览器内合并为 MP4。如果列表有 HLS 主清单和不同清晰度的子清单，优先选主清单，它可以同时提供独立音轨。直播、DRM 视频和只暴露内部媒体分段的专用播放器暂不支持。
 
-## 生成学习笔记
+**普通 B 站视频页**。选好分 P 和清晰度，播放几秒后点「下载当前分 P」，文件名为 `视频标题 - P序号.mp4`。
+
+下载无需配置模型或 API Key。准备期间请保留侧栏和原视频页，开始保存后可在 Chrome 下载记录中查看。MP4 封装使用 [Mediabunny 1.66.2](https://www.npmjs.com/package/mediabunny/v/1.66.2)，DASH 清单解析使用 [mpd-parser 1.4.1](https://www.npmjs.com/package/mpd-parser/v/1.4.1)。两者均随扩展分发。[Mediabunny 许可证](vendor/Mediabunny-LICENSE.txt) · [mpd-parser 许可证](vendor/mpd-parser-LICENSE.txt)
+
+## 生成 B 站学习笔记
 
 1. 在「模型设置」里填 DeepSeek 官方地址 `https://api.deepseek.com`，选择 `deepseek-flash` 并填写 API Key。可以继续使用已保存的配置。[DeepSeek 语音识别](https://api-docs.deepseek.com/zh-cn/guides/asr/) · [DeepSeek 图像输入](https://api-docs.deepseek.com/guides/vision/)
 2. 打开并播放当前分 P 几秒，点「生成学习笔记」。默认从网页的播放请求定位当前分 P 的独立音轨并下载。需要网页已加载可下载的音轨。也可选与当前分 P 对应的本地音视频文件、授权音轨直链，或让当前播放器从头静音播放到片尾。

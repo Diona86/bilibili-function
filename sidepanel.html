@@ -3,22 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>B 站视频总结</title>
+  <title>网页视频下载与 B 站笔记</title>
   <link rel="stylesheet" href="sidepanel.css">
   <script type="module" src="sidepanel.js"></script>
 </head>
 <body>
   <header class="app-header">
-    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><h1>视频总结</h1></div>
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><h1>视频下载与笔记</h1></div>
     <button type="button" id="settingsButton" class="quiet">模型设置</button>
   </header>
 
   <main>
     <section class="video-card" aria-labelledby="videoTitle">
       <div class="video-meta" id="videoMeta" hidden><span id="videoLabel">当前 B 站视频</span><span class="part" id="videoPart"></span></div>
-      <h2 id="videoTitle">打开 B 站视频</h2>
-      <p id="emptyVideo">在普通 B 站视频页打开侧栏，即可生成可回看的学习笔记。</p>
-      <button type="button" id="downloadButton" class="secondary" hidden>下载当前分 P</button>
+      <h2 id="videoTitle">打开视频网页</h2>
+      <p id="emptyVideo">请在目标网页点一下工具栏中的扩展图标。</p>
+      <label id="mediaLabel" hidden>视频来源<select id="mediaSelect"></select></label>
+      <div class="actions">
+        <button type="button" id="scanButton" class="secondary" hidden>查找网页视频</button>
+        <button type="button" id="downloadButton" class="secondary" hidden>下载当前分 P</button>
+        <a id="openPlayer" target="_blank" rel="noopener noreferrer" hidden>打开播放器网页</a>
+      </div>
       <p id="downloadStatus" class="status" role="status" aria-atomic="true"></p>
     </section>
 

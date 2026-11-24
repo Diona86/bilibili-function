@@ -1,5 +1,8 @@
 chrome.action.onClicked.addListener((tab) => {
-  chrome.sidePanel.open({ windowId: tab.windowId }).catch((error) => {
+  chrome.sidePanel.open({ windowId: tab.windowId }).then(() => {
+    // Clicking the toolbar can grant activeTab while the side panel is already open.
+    return chrome.runtime.sendMessage({ target: "bili-panel", kind: "refresh-page" }).catch(() => {});
+  }).catch((error) => {
     console.error("打开视频总结侧栏失败", error.message);
   });
 });

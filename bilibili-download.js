@@ -80,39 +80,11 @@ async function saveVideoFiles(files, expectedUrl, filename) {
   }
 
   async function mergeTracks(video, audio) {
-    const { Input, MP4, BlobSource, Output, Mp4OutputFormat, AppendOnlyStreamTarget,
-      EncodedPacketSink, EncodedVideoPacketSource, EncodedAudioPacketSource } =
-      await import(chrome.runtime.getURL("vendor/mediabunny.min.mjs"));
+    const { Input, MP4, BlobSource } = await import(chrome.runtime.getURL("vendor/mediabunny.min.mjs"));
+    const { remuxMp4 } = await import(chrome.runtime.getURL("media-mp4.js"));
     const inputs = [video, audio].map((file) => new Input({ formats: [MP4], source: new BlobSource(file) }));
-    const chunks = [];
-    const output = new Output({
-      format: new Mp4OutputFormat({ fastStart: "fragmented" }),
-      target: new AppendOnlyStreamTarget(new WritableStream({ write(bytes) { chunks.push(new Blob([bytes])); } })),
-    });
-    async function copyPackets(track, source) {
-      let meta = { decoderConfig: await track.getDecoderConfig() };
-      for await (const packet of new EncodedPacketSink(track).packets()) {
-        await source.add(packet, meta);
-        meta = undefined;
-      }
-      if (meta) throw new Error("媒体轨道为空。");
-      source.close();
-    }
     try {
-      const picture = await inputs[0].getPrimaryVideoTrack();
-      const sound = await inputs[1].getPrimaryAudioTrack();
-      if (!picture || !sound) throw new Error("缺少视频或音频轨道。");
-      const videoSource = new EncodedVideoPacketSource(await picture.getCodec());
-      const audioSource = new EncodedAudioPacketSource(await sound.getCodec());
-      output.addVideoTrack(videoSource, { rotation: await picture.getRotation() });
-      output.addAudioTrack(audioSource);
-      await output.start();
-      await Promise.all([copyPackets(picture, videoSource), copyPackets(sound, audioSource)]);
-      await output.finalize();
-      return new Blob(chunks, { type: "video/mp4" });
-    } catch {
-      await output.cancel().catch(() => {});
-      throw new Error("无法合并这个视频的音画轨道，请在播放器中切换清晰度后重试。");
+      return await remuxMp4(...inputs);
     } finally {
       inputs.forEach((input) => input.dispose());
     }

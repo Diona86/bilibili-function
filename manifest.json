@@ -1,17 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "B 站视频总结",
-  "description": "下载当前分 P 的视频，或结合完整音频和画面生成可以跳转到原片的学习笔记。",
-  "version": "0.7.0",
+  "name": "网页视频下载与 B 站笔记",
+  "description": "下载网页和嵌入式播放器中的视频，在 B 站按分 P 下载或生成学习笔记。",
+  "version": "0.8.0",
   "minimum_chrome_version": "116",
-  "permissions": ["sidePanel", "scripting", "storage", "offscreen"],
+  "permissions": ["sidePanel", "scripting", "storage", "offscreen", "activeTab", "downloads"],
   "host_permissions": ["https://www.bilibili.com/*"],
-  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
   "background": { "service_worker": "background.js" },
   "web_accessible_resources": [{
-    "resources": ["vendor/mediabunny.min.mjs"],
-    "matches": ["https://www.bilibili.com/*"]
+    "resources": ["media-mp4.js", "web-stream.js", "vendor/mediabunny.min.mjs", "vendor/mpd-parser.min.js"],
+    "matches": ["https://*/*", "http://*/*"]
   }],
-  "action": { "default_title": "打开视频总结" },
+  "action": { "default_title": "打开视频下载与笔记" },
   "side_panel": { "default_path": "sidepanel.html" }
 }
