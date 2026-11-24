@@ -1,76 +1,91 @@
-import { Input, UrlSource, HLS_FORMATS, MP4, WEBM, BlobSource } from "./vendor/mediabunny.min.mjs";
-import { remuxMp4 } from "./media-mp4.js";
+import { Input, BlobSource, MP4, WEBM, MPEG_TS, ADTS } from "./vendor/mediabunny.min.mjs";
+import { remux } from "./media-mp4.js";
+import { readBody } from "./media/io.js";
+import { selectTrack, streamPlan } from "./media/manifests.js";
+import { subtitleFile } from "./media/subtitles.js";
+import { checkIsoBoxes, fileInput, verifyFile } from "./media/verify.js";
 
-// All requests run in the player frame and inherit its normal network permissions.
-function mediaFetch(resource, options = {}) {
-  const url = new URL(resource instanceof Request ? resource.url : resource);
-  if (!/^https?:$/.test(url.protocol) || url.username || url.password) throw new Error("媒体地址无效。");
-  const timeout = AbortSignal.timeout(120_000);
-  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
-  return fetch(resource, { ...options, signal });
+async function assembled(track, ctx) {
+  const blobs = [];
+  for (const part of [track.init, ...track.segments].filter(Boolean)) {
+    const { blob } = await readBody(part.url, ctx, { range: part.range, count: true });
+    blobs.push(blob);
+    ctx.segment();
+  }
+  const blob = new Blob(blobs);
+  await checkIsoBoxes(blob, ctx.signal);
+  return new Input({ formats: [MP4, WEBM, MPEG_TS, ADTS], source: new BlobSource(blob) });
 }
-
-async function readDashFile(playlist, credentials, signal) {
-  async function readPart({ resolvedUri, byterange }) {
-    const start = byterange?.offset;
-    const end = byterange && start + byterange.length - 1;
-    const headers = byterange ? { Range: "bytes=" + start + "-" + end } : {};
-    const response = await mediaFetch(resolvedUri, { headers, credentials, signal });
-    if (!response.ok || (!byterange && response.status === 206)) throw new Error("DASH 分段下载失败。");
-    const returnedRange = response.headers.get("Content-Range");
-    if (byterange && returnedRange && !returnedRange.startsWith("bytes " + start + "-" + end + "/")) {
-      throw new Error("DASH 分段范围与清单不一致。");
+async function biliFile(resource, ctx) {
+  async function fetchOne(urls) {
+    let error;
+    for (const url of urls.slice(0, 4)) {
+      try { return (await readBody(url, ctx, { count: true, attempts: 1 })).blob; }
+      catch (e) { ctx.signal.throwIfAborted(); error = e; }
     }
-    let part = await response.blob();
-    if (byterange && response.status === 200) part = part.slice(start, end + 1);
-    if (!part.size || (byterange && part.size !== byterange.length)) throw new Error("DASH 分段不完整。");
-    return part;
+    throw error || new Error("当前分 P 没有可读取的媒体。");
   }
-  if (!playlist.segments?.length) {
-    return readPart({ resolvedUri: playlist.sidx?.resolvedUri || playlist.resolvedUri });
+  const files = resource.files;
+  ctx.phase("Downloading");
+  if (files.direct.length) {
+    try {
+      const blob = await fetchOne(files.direct);
+      await verifyFile(blob, {}, ctx.signal);
+      return { blob, extension: "mp4" };
+    } catch (e) { ctx.signal.throwIfAborted(); if (!files.video.length) throw e; }
   }
-  const parts = [];
-  const init = playlist.segments[0].map;
-  if (init) parts.push(await readPart(init));
-  for (const segment of playlist.segments) parts.push(await readPart(segment));
-  return new Blob(parts);
-}
-
-async function dashInputs(response, credentials, signal) {
-  await import("./vendor/mpd-parser.min.js");
-  const xml = await response.text();
-  const root = globalThis.mpdParser.stringToMpdXml(xml);
-  if (root.getAttribute("type") === "dynamic") throw new Error("直播仍在进行，请在回放发布后下载。");
-  if (root.getElementsByTagNameNS("*", "ContentProtection").length) throw new Error("该 DASH 视频使用了内容保护。");
-  if (root.getElementsByTagNameNS("*", "Period").length !== 1) throw new Error("目前支持单时段的 DASH 点播视频。");
-  const manifest = globalThis.mpdParser.parse(xml, { manifestUri: response.url });
-  const highestBandwidth = (tracks) => [...tracks].sort((a, b) => b.attributes.BANDWIDTH - a.attributes.BANDWIDTH)[0];
-  const video = highestBandwidth(manifest.playlists);
-  if (!video) throw new Error("清单中没有视频轨道。");
-  const groups = Object.values(manifest.mediaGroups.AUDIO[video.attributes.AUDIO] ?? {});
-  const group = groups.find((item) => item.default) ?? groups[0];
-  const audio = group && highestBandwidth(group.playlists);
-  const files = await Promise.all((audio ? [video, audio] : [video]).map((track) => readDashFile(track, credentials, signal)));
-  return files.map((file) => new Input({ formats: [MP4, WEBM], source: new BlobSource(file) }));
-}
-
-export async function downloadStream(response, kind, credentials) {
-  const controller = new AbortController();
-  let inputs = [];
+  async function track(urls) {
+    const blob = await fetchOne(urls);
+    await checkIsoBoxes(blob, ctx.signal);
+    return fileInput(blob);
+  }
+  const input = await track(files.video);
+  let audio;
   try {
-    if (kind === "dash") {
-      inputs = await dashInputs(response, credentials, controller.signal);
-    } else {
-      await response.body?.cancel();
-      const source = new UrlSource(response.url, {
-        requestInit: { credentials }, fetchFn: mediaFetch,
-        getRetryDelay: (attempts) => attempts < 1 ? 0.5 : null,
-      });
-      inputs = [new Input({ formats: HLS_FORMATS, source })];
-    }
-    return await remuxMp4(...inputs);
-  } finally {
-    controller.abort();
-    inputs.forEach((input) => input.dispose());
+    if (files.audio.length) audio = await track(files.audio);
+    else if (!files.silent) throw new Error("当前分 P 缺少已加载的独立音轨。");
+    ctx.phase("Merging");
+    return await remux(input, audio, { ctx, container: "mp4" });
+  } finally { input.dispose(); audio?.dispose(); }
+}
+export async function prepareResource(resource, choice, ctx) {
+  if (resource.unsupportedReason) throw new Error(resource.unsupportedReason);
+  let result, expectedDuration;
+  if (choice.subtitleId) {
+    const track = selectTrack(resource.subtitleTracks, choice.subtitleId, "字幕");
+    ctx.phase("Downloading");
+    const subtitle = await subtitleFile(track, ctx);
+    ctx.phase("Verifying");
+    return subtitle;
   }
+  if (resource.protocol === "bilibili") result = await biliFile(resource, ctx);
+  else if (["hls", "dash"].includes(resource.protocol)) {
+    const plan = await streamPlan(resource.mediaUrl, resource.protocol, choice, ctx);
+    expectedDuration = plan.duration;
+    const tracks = [plan.video, plan.sound].filter(Boolean);
+    ctx.phase("Downloading", { segmentTotal: tracks.reduce((n, t) => n + t.segments.length + Number(Boolean(t.init)), 0) });
+    const inputs = [];
+    try {
+      for (const track of tracks) inputs.push(await assembled(track, ctx));
+      await ctx.checkpoint();
+      ctx.phase("Merging");
+      let videoOffset = plan.video.presentationOffset, audioOffset = plan.sound?.presentationOffset;
+      if (resource.protocol === "hls" && plan.sound?.programTime != null && plan.video.programTime != null) {
+        const delta = plan.sound.programTime - plan.video.programTime;
+        videoOffset = await inputs[0].getFirstTimestamp();
+        audioOffset = await inputs[1].getFirstTimestamp() - delta;
+      }
+      result = await remux(inputs[0], inputs[1], { ctx, container: choice.container, videoOffset, audioOffset });
+      if (plan.requiresAudio && !result.hasAudio) throw new Error("未找到清单声明的音频轨道。");
+    } finally { inputs.forEach(input => input.dispose()); }
+  } else {
+    ctx.phase("Downloading");
+    const file = await readBody(resource.mediaUrl, ctx, { count: true });
+    if (resource.contentLength && file.blob.size !== resource.contentLength) throw new Error("文件大小与识别时的响应不符，请重新查找。");
+    expectedDuration = resource.duration;
+    result = { blob: file.blob, extension: resource.fileExtension };
+  }
+  ctx.phase("Verifying");
+  const info = await verifyFile(result.blob, { audio: result.hasAudio, duration: expectedDuration, extension: result.extension }, ctx.signal);
+  return { blob: result.blob, extension: info.extension };
 }

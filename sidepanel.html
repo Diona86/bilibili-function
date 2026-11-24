@@ -18,13 +18,31 @@
       <div class="video-meta" id="videoMeta" hidden><span id="videoLabel">当前 B 站视频</span><span class="part" id="videoPart"></span></div>
       <h2 id="videoTitle">打开视频网页</h2>
       <p id="emptyVideo">请在目标网页点一下工具栏中的扩展图标。</p>
-      <label id="mediaLabel" hidden>视频来源<select id="mediaSelect"></select></label>
+      <label id="mediaLabel" hidden>网页视频<select id="mediaSelect"></select></label>
+      <div id="mediaDetails" hidden>
+        <img id="mediaPreview" alt="所选视频画面" hidden>
+        <p id="mediaFacts"></p>
+        <div class="track-options">
+          <label hidden>播放来源<select id="sourceVariant"></select></label>
+          <label hidden>视频轨道与画质<select id="qualitySelect"></select></label>
+          <label hidden>音频轨道<select id="audioTrackSelect"></select></label>
+          <label hidden>字幕<select id="subtitleSelect"></select></label>
+          <label hidden>输出格式<select id="containerSelect"><option value="auto">自动匹配编码</option><option value="mp4">MP4</option><option value="webm">WebM</option><option value="mkv">MKV</option></select></label>
+        </div>
+      </div>
       <div class="actions">
         <button type="button" id="scanButton" class="secondary" hidden>查找网页视频</button>
         <button type="button" id="downloadButton" class="secondary" hidden>下载当前分 P</button>
+        <button type="button" id="subtitleButton" class="secondary" hidden>单独下载字幕</button>
         <a id="openPlayer" target="_blank" rel="noopener noreferrer" hidden>打开播放器网页</a>
       </div>
       <p id="downloadStatus" class="status" role="status" aria-atomic="true"></p>
+    </section>
+
+    <section id="tasksPanel" class="result-panel" aria-label="下载任务" hidden>
+      <div id="queueGroup" hidden><h2>下载队列</h2><ul id="taskQueue" class="task-list"></ul></div>
+      <details id="historyGroup" hidden><summary>下载历史 <span id="historyCount"></span></summary><ul id="taskHistory" class="task-list"></ul></details>
+      <p id="taskNotice" role="status" class="status" data-tone="error"></p>
     </section>
 
     <div id="workspace" hidden>

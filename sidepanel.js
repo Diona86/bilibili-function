@@ -1,7 +1,6 @@
 import { audioLink, requireSpeechAccess, transcribeVideo } from "./audio.js";
 import { downloadBiliAudio } from "./bilibili-audio.js";
-import { downloadBiliVideo } from "./bilibili-download.js";
-import { downloadPageVideo, findPageVideos } from "./web-download.js";
+import { initMediaPanel } from "./media-panel.js";
 import { modelEndpoint, modelHost } from "./summary.js";
 import { captureVideoFrames, formatTime, runOnVideo, videoFromTab } from "./video.js";
 
@@ -10,7 +9,7 @@ const ui = Object.fromEntries([
   "settingsError", "closeSettings", "saveSettings", "videoMeta", "videoLabel", "videoTitle", "videoPart",
   "emptyVideo", "workspace", "audioSource", "audioFile", "audioUrl", "sourceHelp", "generateButton",
   "status", "retryButton", "resultPanel", "resultVideo", "overview", "highlights", "copyButton", "transcript", "transcriptText",
-  "sourceSection", "sourceNotice", "downloadButton", "downloadStatus", "scanButton", "mediaLabel", "mediaSelect", "openPlayer",
+  "sourceSection", "sourceNotice",
 ].map((id) => [id, document.getElementById(id)]));
 
 const sourceHelp = {
@@ -27,9 +26,7 @@ let result = null;
 let preparing = null;
 let job = null;
 let videoRevision = 0;
-let downloadingKey = null;
-let mediaOptions = [];
-let scanning = null;
+const mediaPanel = initMediaPanel();
 
 function showStatus(message = "", error = false) {
   ui.status.textContent = message;
@@ -51,23 +48,7 @@ function renderControls() {
   ui.videoMeta.hidden = !displayed;
   ui.emptyVideo.hidden = Boolean(displayed);
   const current = video && displayed?.key === video.key;
-  const generic = current && !video.part;
-  const reading = Boolean(scanning || downloadingKey);
-  const selected = mediaOptions[ui.mediaSelect.selectedIndex];
-  const embed = selected?.kind === "frame";
-  ui.scanButton.hidden = !generic;
-  ui.scanButton.disabled = reading;
-  ui.scanButton.textContent = scanning ? "正在查找…" : mediaOptions.length ? "重新查找" : "查找网页视频";
-  ui.mediaLabel.hidden = !generic || !mediaOptions.length;
-  ui.mediaSelect.disabled = reading;
-  ui.downloadButton.hidden = !current || (generic && !mediaOptions.length);
-  ui.downloadButton.disabled = reading;
-  ui.downloadButton.textContent = video && downloadingKey === video.key ? "正在准备…" :
-    !generic ? "下载当前分 P" : embed ? "允许读取播放器" : "下载所选视频";
-  ui.openPlayer.hidden = !generic || !embed;
-  if (!ui.openPlayer.hidden) ui.openPlayer.href = selected.url;
-  else ui.openPlayer.removeAttribute("href");
-  ui.downloadStatus.hidden = !current;
+  mediaPanel.display(current ? video : null);
   ui.workspace.hidden = !displayed?.part;
   ui.sourceSection.hidden = busy;
   ui.sourceNotice.hidden = busy;
@@ -155,12 +136,7 @@ async function activeVideo() {
   return videoFromTab(tab) ?? { tabId: tab.id, key: tab.id + ":" + tab.url, url: tab.url, title: tab.title || new URL(tab.url).host };
 }
 
-function clearMedia() {
-  scanning = null;
-  mediaOptions = [];
-  ui.mediaSelect.replaceChildren();
-  ui.downloadStatus.textContent = "";
-}
+function clearMedia() { mediaPanel.clear(); }
 
 async function refreshVideo() {
   const revision = ++videoRevision;
@@ -352,73 +328,6 @@ async function retryNotes() {
     ui.retryButton.disabled = false;
   }
 }
-
-async function scanMedia(embed) {
-  if (!video || video.part || scanning || downloadingKey) return;
-  const current = video;
-  const request = {};
-  scanning = request;
-  ui.downloadStatus.textContent = embed ? "正在请求播放器访问权限…" : "正在查找网页中的视频…";
-  ui.downloadStatus.dataset.tone = "normal";
-  renderControls();
-  try {
-    if (embed && !(await chrome.permissions.request({ origins: [modelHost(embed.url)] }))) {
-      throw new Error("需要该播放器域名的访问权限才能读取嵌入的视频。");
-    }
-    if (scanning !== request) return;
-    mediaOptions = [];
-    ui.mediaSelect.replaceChildren();
-    const options = await findPageVideos(current);
-    if (scanning !== request) return;
-    mediaOptions = options;
-    ui.mediaSelect.replaceChildren(...options.map((item) => {
-      const option = document.createElement("option");
-      const type = { frame: "嵌入播放器", hls: "HLS 清单", dash: "DASH 清单", file: "视频文件" }[item.kind];
-      const host = new URL(item.url).host;
-      option.textContent = type + " · " + item.title + (host && host !== item.title ? " · " + host : "");
-      return option;
-    }));
-    ui.downloadStatus.textContent = options.length ? "" : "未找到可下载的视频。请先播放几秒，再点「查找网页视频」。";
-    if (embed && options.some((item) => item.kind === "frame" && item.url === embed.url)) {
-      ui.downloadStatus.textContent = "仍无法读取这个嵌入页。可在新标签页打开播放器，再点扩展图标查找。";
-    }
-  } catch (error) {
-    if (scanning === request) {
-      ui.downloadStatus.textContent = error.message;
-      ui.downloadStatus.dataset.tone = "error";
-    }
-  } finally {
-    if (scanning === request) scanning = null;
-    renderControls();
-  }
-}
-
-ui.scanButton.addEventListener("click", () => scanMedia());
-ui.mediaSelect.addEventListener("change", renderControls);
-ui.downloadButton.addEventListener("click", async () => {
-  if (!video || downloadingKey) return;
-  const current = video;
-  const source = mediaOptions[ui.mediaSelect.selectedIndex];
-  if (!current.part && !source) return;
-  if (!current.part && source.kind === "frame") return scanMedia(source);
-  downloadingKey = current.key;
-  ui.downloadStatus.textContent = "正在准备视频，请保留原网页和侧栏…";
-  ui.downloadStatus.dataset.tone = "normal";
-  renderControls();
-  try {
-    if (current.part) await downloadBiliVideo(current);
-    else await downloadPageVideo(current, source);
-    if (video?.key === current.key) ui.downloadStatus.textContent = "已请求保存视频，可在 Chrome 下载记录中查看。";
-  } catch (error) {
-    if (video?.key === current.key) {
-      ui.downloadStatus.textContent = error.message;
-      ui.downloadStatus.dataset.tone = "error";
-    }
-  } finally {
-    downloadingKey = null;
-    renderControls();
-  }
-});
 
 ui.audioSource.addEventListener("change", renderControls);
 ui.audioFile.addEventListener("change", renderControls);

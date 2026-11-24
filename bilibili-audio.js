@@ -75,7 +75,10 @@ async function downloadInVideoTab(cid, expectedUrl, name) {
       if (!onExpectedPart()) return { error: "视频分 P 已切换，请在当前分 P 重新生成。" };
       const block = await new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(",") + 1));
+        reader.onload = () => {
+          const url = /** @type {string} */ (reader.result);
+          resolve(url.slice(url.indexOf(",") + 1));
+        };
         reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(file.slice(offset, offset + blockSize));
       });

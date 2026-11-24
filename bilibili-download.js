@@ -1,4 +1,5 @@
 import { resolveBiliPart } from "./bilibili-audio.js";
+import { mediaResource } from "./media/resource.js";
 
 // Runs in the page world so the player's manifest and its recent requests are both available.
 function findVideoFiles(cid) {
@@ -26,7 +27,7 @@ function findVideoFiles(cid) {
       if (/\.mp4$/i.test(new URL(url).pathname)) direct.add(url);
     }
   }
-  const player = document.querySelector(".bpx-player-video-wrap video, #bilibili-player video");
+  const player = /** @type {HTMLVideoElement | null} */ (document.querySelector(".bpx-player-video-wrap video, #bilibili-player video"));
   const src = mediaUrl(player?.currentSrc);
   if (src && !data?.durl?.length && /\.mp4$/i.test(new URL(src).pathname)) direct.add(src);
 
@@ -46,95 +47,15 @@ function findVideoFiles(cid) {
   return { direct: [...direct], video: [...video], audio: [...audio], silent: Boolean(silent) };
 }
 
-// Fetch in the video's isolated world so the CDN receives the normal page referrer.
-async function saveVideoFiles(files, expectedUrl, filename) {
-  const expected = new URL(expectedUrl);
-  function verifyPart() {
-    const here = new URL(location.href);
-    if (here.pathname.replace(/\/$/, "") !== expected.pathname.replace(/\/$/, "") ||
-        (Number(here.searchParams.get("p")) || 1) !== Number(expected.searchParams.get("p"))) {
-      throw new Error("视频分 P 已切换，请重新下载。");
-    }
-  }
-
-  const controller = new AbortController();
-  async function fetchFile(urls) {
-    for (const url of urls.slice(0, 4)) {
-      verifyPart();
-      try {
-        const response = await fetch(url, {
-          credentials: "omit", redirect: "error", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(600000)]),
-        });
-        if (response.status !== 200 || response.headers.has("Content-Range")) {
-          await response.body?.cancel();
-          continue;
-        }
-        const file = await response.blob();
-        // Both standalone MP4 and Bilibili DASH files start with an ISO BMFF file type box.
-        if (await file.slice(4, 8).text() === "ftyp") return file;
-      } catch {
-        controller.signal.throwIfAborted();
-      }
-    }
-    throw new Error("未能下载完整媒体文件，请刷新视频页并播放几秒后重试。");
-  }
-
-  async function mergeTracks(video, audio) {
-    const { Input, MP4, BlobSource } = await import(chrome.runtime.getURL("vendor/mediabunny.min.mjs"));
-    const { remuxMp4 } = await import(chrome.runtime.getURL("media-mp4.js"));
-    const inputs = [video, audio].map((file) => new Input({ formats: [MP4], source: new BlobSource(file) }));
-    try {
-      return await remuxMp4(...inputs);
-    } finally {
-      inputs.forEach((input) => input.dispose());
-    }
-  }
-
-  if (globalThis.biliSummarySavingVideo) return { error: "这个视频页已有下载正在准备。" };
-  globalThis.biliSummarySavingVideo = true;
-  try {
-    verifyPart();
-    const hasDash = files.video.length && (files.audio.length || files.silent);
-    let file;
-    if (files.direct.length) {
-      try { file = await fetchFile(files.direct); }
-      catch (error) { if (!hasDash) throw error; }
-    }
-    if (!file) {
-      if (!hasDash) throw new Error("未找到当前分 P 的完整媒体，请播放几秒后重试。");
-      const [picture, sound] = await Promise.all([
-        fetchFile(files.video), files.audio.length ? fetchFile(files.audio) : null,
-      ]);
-      verifyPart();
-      file = sound ? await mergeTracks(picture, sound) : picture;
-    }
-    verifyPart();
-    const href = URL.createObjectURL(file);
-    try {
-      const link = document.createElement("a");
-      link.href = href;
-      link.download = filename;
-      link.click();
-    } finally {
-      setTimeout(() => URL.revokeObjectURL(href), 60000);
-    }
-    return {};
-  } catch (error) {
-    return { error: error.message };
-  } finally {
-    controller.abort();
-    delete globalThis.biliSummarySavingVideo;
-  }
-}
-
-export async function downloadBiliVideo(video) {
+export async function getBiliResource(video) {
   const { cid, target } = await resolveBiliPart(video);
-  const [lookup] = await chrome.scripting.executeScript({ target, world: "MAIN", func: findVideoFiles, args: [cid] });
-  if (!lookup?.result) throw new Error("无法读取播放信息，请刷新视频页后重试。");
-  const title = video.title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").trim().slice(0, 90) || "视频";
-  const filename = title + " - P" + video.part + ".mp4";
-  const [reply] = await chrome.scripting.executeScript({
-    target, func: saveVideoFiles, args: [lookup.result, video.url, filename],
+  const [reply] = await chrome.scripting.executeScript({ target, world: "MAIN", func: findVideoFiles, args: [cid] });
+  const files = reply?.result;
+  if (!files || (!files.direct.length && !(files.video.length && (files.audio.length || files.silent)))) {
+    throw new Error("请先播放当前分 P 几秒，再下载视频。");
+  }
+  return mediaResource(video, { documentId: reply.documentId, href: video.url }, {
+    id: video.key, protocol: "bilibili", sourceType: "bilibili", detectionConfidence: "player",
+    title: video.title + " - P" + video.part, mediaUrl: null, files, credentials: "omit", supportStatus: "ready"
   });
-  if (!reply?.result || reply.result.error) throw new Error(reply?.result?.error ?? "视频页已关闭或刷新，请重试。");
 }

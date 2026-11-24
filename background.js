@@ -1,3 +1,6 @@
+import { installDownloadManager } from "./download-manager.js";
+import { watch } from "./media/network.js";
+
 chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ windowId: tab.windowId }).then(() => {
     // Clicking the toolbar can grant activeTab while the side panel is already open.
@@ -5,6 +8,7 @@ chrome.action.onClicked.addListener((tab) => {
   }).catch((error) => {
     console.error("打开视频总结侧栏失败", error.message);
   });
+  void watch(tab.id, tab.url);
 });
 
 const jobPage = "jobs.html";
@@ -26,12 +30,14 @@ function openJobPage() {
       await chrome.offscreen.createDocument({
         url: jobPage,
         reasons: ["BLOBS"],
-        justification: "Read and decode the selected audio blob for a long-running transcription in the background.",
+        justification: "Prepare selected media blobs for a verified download or audio transcription.",
       });
     })().finally(() => { opening = null; });
   }
   return opening;
 }
+
+installDownloadManager(openJobPage);
 
 async function forwardJob(message) {
   if (message.kind === "start") await openJobPage();

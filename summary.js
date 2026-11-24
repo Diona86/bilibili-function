@@ -153,6 +153,7 @@ export async function summarizeNotes(evidence, model, signal, onProgress) {
     signal.throwIfAborted();
     onProgress(groups.length === 1 ? "正在综合音频转写和画面，整理学习笔记…" :
       `正在整理第 ${results.length + 1} / ${groups.length} 段笔记…`);
+    /** @type {({type: "text", text: string} | {type: "image_url", image_url: {url: string}})[]} */
     const content = [{ type: "text", text: "以下是当前时段按顺序排列的资料。用转写理解口播，用相邻画面核对和补充内容。" }];
     for (const { text, image } of group) {
       content.push({ type: "text", text });

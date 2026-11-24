@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "allowJs": true, "checkJs": true, "noEmit": true, "target": "ES2023",
+    "module": "ESNext", "moduleResolution": "Bundler", "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["chrome"], "skipLibCheck": true, "strictNullChecks": false
+  },
+  "include": ["media/**/*.js", "media-panel.js", "background.js", "bilibili-download.js", "media-mp4.js", "web-stream.js", "web-download.js", "download-manager.js", "types/**/*.d.ts"],
+  "exclude": ["node_modules", "vendor"]
+}

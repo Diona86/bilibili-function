@@ -44,7 +44,7 @@ async function usePlayer(videoUrl, seconds, capture) {
   const changedVideo = "视频已切换，请在当前视频重新生成摘要。";
   if (!onExpectedPage()) return { error: changedVideo };
 
-  const player = document.querySelector(".bpx-player-video-wrap video, #bilibili-player video")
+  const player = /** @type {HTMLVideoElement | null} */ (document.querySelector(".bpx-player-video-wrap video, #bilibili-player video"))
     ?? Array.from(document.querySelectorAll("video"))
       .sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
 
